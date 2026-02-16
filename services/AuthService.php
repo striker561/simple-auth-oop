@@ -1,0 +1,69 @@
+<?php
+
+class AuthService {
+    private $user;
+
+    // Inject user model dependency
+    public function __construct(User $user)
+    {
+        $this->user = $user;
+    }
+
+    // Registration method
+    public function register($username, $email, $password){
+        // Check if user already exists
+        $userExists = $this->user->findUser($email, $username);
+
+        if($userExists){
+            return "User with this email or username already exists.";
+        }
+
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        return $this->user->register($username, $email, $hashedPassword);
+    }
+
+    // Login method
+    public function login($username, $password){
+        return $this->user->login($username, $password);
+    }
+
+    // Password recovery method
+    public function recoverPassword($email){
+        $user = $this->user->findUser($email, null);
+
+        if($user){
+            $token = bin2hex(random_bytes(16)); 
+            $token_hash = hash('sha256', $token); 
+            $saveToken = $this->user->saveToken($token_hash, $email);
+            
+            if (!$saveToken) {
+                error_log("Failed to save reset token for email: " . $email);
+                return null;
+            }
+            
+            return $token;
+        }
+
+        return null;
+    }
+
+    // Reset password method
+    public function resetPassword($hashed_token, $newPassword) {
+        $user = $this->user->findUserByToken($hashed_token);
+
+        if (!$user) {
+            return null;
+        }
+
+        if ($user['reset_token_expires_at'] < date("Y-m-d H:i:s")) { 
+            return null;
+        }   
+    
+        if ($user) {
+            $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+            return $this->user->updatePassword($user['email'], $hashedPassword);
+        }
+    
+        return false;   
+    }
+}
